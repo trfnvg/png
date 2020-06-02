@@ -89,7 +89,7 @@ void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp
   chrono::duration<double> elapsed = finish - start;
   cout << "Elapsed time 1: " << elapsed.count() << " s\n";
   
-  for(int k = 0; k < 255; k++)
+  for(int k = 0; k < 255; k++) // вывожу в консоль в пять строк массив-гистограмму
   {
     if (enter == 50)
     {
@@ -143,7 +143,7 @@ void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp
   chrono::duration<double> elapsed2 = finish2 - start2;
   cout << "Elapsed time 2: " << elapsed2.count() << " s\n";
 
-  for(int k = 0; k < 255; k++)
+  for(int k = 0; k < 255; k++) // вывожу в консоль в пять строк массив-гистограмму
   {
     if (enter == 50)
     {
