@@ -4,38 +4,35 @@ struct mydata
   pthread_t id;
   int start, endd, width, length, bits_per_pixel, j;
   int *gist;
+  int needle_count; // кол-во нитей
 
 };
 
 
-void do_work(mydata *work) // функция для построения гистограммы параллельно по строкам
+void do_work(mydata *work)
 {
     uint8_t r, g, b, brightness;
     for (int k = work->j * work->width; k < work->j * work->width + work->width; k++)
     {
-        //printf("%d \n", k);
         r = work->vec[k*(work->bits_per_pixel)];
         g = work->vec[k*(work->bits_per_pixel) + 1];
         b = work->vec[k*(work->bits_per_pixel) + 2];
         brightness = round(0.3*r+0.59*g+0.11*b);
         work->gist[brightness]++;
     }
-
-}
-
-void do_work1(mydata *work1) //функция построения гистограммы за один пробег
-{
-    uint8_t r, g, b, brightness;
-    for (int k = 0; k < work1->width * work1->length; k++)
+    if (work->needle_count == 0) // если у нас одна нить продолжаем строить гистограмму (без этого цикла для одной нити была бы обработана только первая строка)
     {
-        //printf("%d \n", k);
-        r = work1->vec[k*(work1->bits_per_pixel)];
-        g = work1->vec[k*(work1->bits_per_pixel) + 1];
-        b = work1->vec[k*(work1->bits_per_pixel) + 2];
-        brightness = round(0.3*r+0.59*g+0.11*b);
-        work1->gist[brightness]++;
+        for (int k = work->width; k < work->width * work->length; k++)
+        {
+          r = work->vec[k*(work->bits_per_pixel)];
+          g = work->vec[k*(work->bits_per_pixel) + 1];
+          b = work->vec[k*(work->bits_per_pixel) + 2];
+          brightness = round(0.3*r+0.59*g+0.11*b);
+          work->gist[brightness]++;
+        }
     }
 }
+
 
 void *do_stuff(void *d)
 {
@@ -47,13 +44,14 @@ void *do_stuff(void *d)
 void *do_stuff1(void *d)
 {
   mydata *data1=(mydata*)d;
-  do_work1(data1);
+  do_work(data1);
   return 0;
 }
 
 void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp)
 {
-  vector<mydata> work(width); //вектор структур
+  int needles = width;
+  vector<mydata> work(width);
   int gist[255], enter = 0;
   cout << endl;
   for (int k = 0; k < 255; k++)
@@ -68,12 +66,11 @@ void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp
     work[i].width = width;
     work[i].length = length;
     work[i].vec = &tmp[0];
+    work[i].needle_count = needles;
     //do_work(&work[i]);
   }
   cout << endl;
-  
   auto start = chrono::high_resolution_clock::now();
-  
   for (int i = 0; i < width; i ++)
   {
       void *ret = (void*)&work[i];
@@ -84,12 +81,11 @@ void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp
   {
       pthread_join(work[i].id, 0);
   }
-  
   auto finish = chrono::high_resolution_clock::now();
   chrono::duration<double> elapsed = finish - start;
   cout << "Elapsed time 1: " << elapsed.count() << " s\n";
-  
-  for(int k = 0; k < 255; k++) // вывожу в консоль в пять строк массив-гистограмму
+
+  for(int k = 0; k < 255; k++)
   {
     if (enter == 50)
     {
@@ -104,11 +100,9 @@ void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp
     }
   }
   enter = 0;
-  
-  //построили гистограмму через параллельный пробег по строкам
-  //теперь построим за один проход
+  needles = 0;
 
-  vector<mydata> work1(width); 
+  vector<mydata> work1(width);
 
   for (int k = 0; k < 255; k++)
   {
@@ -123,11 +117,10 @@ void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp
     work1[i].width = width;
     work1[i].length = length;
     work1[i].vec = &tmp[0];
+    work[i].needle_count = needles;
   }
   cout << endl;
-  
   auto start2 = chrono::high_resolution_clock::now();
-  
   for (int i = 0; i < 1; i ++)
   {
       void *ret1 = (void*)&work1[i];
@@ -138,12 +131,11 @@ void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp
   {
       pthread_join(work1[i].id, 0);
   }
-  
   auto finish2 = chrono::high_resolution_clock::now();
   chrono::duration<double> elapsed2 = finish2 - start2;
   cout << "Elapsed time 2: " << elapsed2.count() << " s\n";
 
-  for(int k = 0; k < 255; k++) // вывожу в консоль в пять строк массив-гистограмму
+  for(int k = 0; k < 255; k++)
   {
     if (enter == 50)
     {
