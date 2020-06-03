@@ -10,7 +10,7 @@ struct mydata
 void do_work(mydata *work) //Функция построения гистограммы
 {
     uint8_t  r, g, b, brightness;
-    for (int k = work->start; k < work -> endd; k += work->bits_per_pixel)
+    for (int k = work -> start; k < work -> endd; k += work -> bits_per_pixel)
     {
           r = work->vec[k];
           g = work->vec[k + 1];
