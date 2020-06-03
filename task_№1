@@ -7,7 +7,7 @@ void do_work(mydata *work)
           g = work->vec[k + 1];
           b = work->vec[k + 2];
           brightness = round(0.3*r+0.59*g+0.11*b);
-          work->gist[brightness]++;
+          work->gist[work->j][brightness]++;
     }
 }
 
@@ -20,26 +20,41 @@ void *do_stuff(void *d)
 
 void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp)
 {
-  int gist[255], enter = 0;
-  for (int k = 0; k < 255; k++)
-  {
-    gist[k] = 0;
-  }
+  int enter = 0;
+
   int k = 10;
+
+  int **gist;
+  gist = (int **)malloc( k * sizeof(int*) );
+  for(int i = 0; i < k; i++)
+  {
+      gist[i] = (int*)malloc( 255*sizeof(int) );
+  }
+
+  for (int l = 0; l < k; l++)
+  {
+      for (int f = 0; f < 255; f++)
+      {
+          gist[l][f] = 0;
+      }
+  }
+
   cout << "The number of parts " << k << endl;
   vector <mydata> work(k);
+
   for (int i = 0; i < k; i++ )
   {
+    work[i].j = i;
     work[i].bits_per_pixel = bits_per_pixel;
     work[i].gist = gist;
     work[i].width = width;
     work[i].length = length;
     work[i].vec = &tmp[0];
+
     work[i].start = width * length * bits_per_pixel * i;
     work[i].start /= k;
     work[i].endd = width * length * bits_per_pixel * ( i + 1 );
     work[i].endd /= k;
-    //do_work(&work[i]);
   }
 
   cout << endl;
@@ -58,17 +73,31 @@ void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp
   chrono::duration<double> elapsed = finish - start;
   cout << "Elapsed time 1: " << elapsed.count() << " s\n";
 
+  int result[255];
+  for (int f = 0; f < 255; f++)
+  {
+      result[f] = 0;
+  }
+
+  for(int i = 0; i < k; i++)
+  {
+      for (int j = 0; j < 255; j++)
+      {
+          result[j] += gist[i][j];
+      }
+  }
+
   for(int m = 0; m < 255; m++)
   {
     if (enter == 50)
     {
-      printf("%d ", gist[m]);
+      printf("%d ", result[m]);
       cout << endl;
       enter = 0;
     }
     else
     {
-      printf("%d ", gist[m]);
+      printf("%d ", result[m]);
       enter ++;
     }
   }
