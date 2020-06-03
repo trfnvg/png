@@ -1,12 +1,3 @@
-struct mydata
-{
-  uint8_t *vec;
-  pthread_t id;
-  int start, endd, width, length, bits_per_pixel;
-  int *gist;
-
-};
-
 void do_work(mydata *work)
 {
     uint8_t  r, g, b, brightness;
@@ -29,16 +20,14 @@ void *do_stuff(void *d)
 
 void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp)
 {
-  vector<mydata> work(width);
   int gist[255], enter = 0;
-  cout << endl;
   for (int k = 0; k < 255; k++)
   {
     gist[k] = 0;
   }
-  int k;
-  cout << "Enter the number of parts ";
-  cin >> k;
+  int k = 10;
+  cout << "The number of parts " << k << endl;
+  vector <mydata> work(k);
   for (int i = 0; i < k; i++ )
   {
     work[i].bits_per_pixel = bits_per_pixel;
@@ -53,14 +42,15 @@ void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp
     //do_work(&work[i]);
   }
 
+  cout << endl;
   auto start = chrono::high_resolution_clock::now();
-  for (int i = 0; i < width; i ++)
+  for (int i = 0; i < k; i ++)
   {
       void *ret = (void*)&work[i];
       pthread_create(&work[i].id, 0, do_stuff, ret);
   }
 
-  for (int i = 0; i < width; i ++)
+  for (int i = 0; i < k; i ++)
   {
       pthread_join(work[i].id, 0);
   }
@@ -68,18 +58,19 @@ void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp
   chrono::duration<double> elapsed = finish - start;
   cout << "Elapsed time 1: " << elapsed.count() << " s\n";
 
-  for(int k = 0; k < 255; k++)
+  for(int m = 0; m < 255; m++)
   {
     if (enter == 50)
     {
-      printf("%d ", gist[k]);
+      printf("%d ", gist[m]);
       cout << endl;
       enter = 0;
     }
     else
     {
-      printf("%d ", gist[k]);
+      printf("%d ", gist[m]);
       enter ++;
     }
   }
+
 }
