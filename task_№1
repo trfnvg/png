@@ -2,37 +2,23 @@ struct mydata
 {
   uint8_t *vec;
   pthread_t id;
-  int start, endd, width, length, bits_per_pixel, j;
+  int start, endd, width, length, bits_per_pixel;
   int *gist;
-  int needle_count; // кол-во нитей
-
 };
 
 
-void do_work(mydata *work)
+void do_work(mydata *work) //Функция построения гистограммы
 {
-    uint8_t r, g, b, brightness;
-    for (int k = work->j * work->width; k < work->j * work->width + work->width; k++)
+    uint8_t  r, g, b, brightness;
+    for (int k = work->start; k < work -> endd; k += 4)
     {
-        r = work->vec[k*(work->bits_per_pixel)];
-        g = work->vec[k*(work->bits_per_pixel) + 1];
-        b = work->vec[k*(work->bits_per_pixel) + 2];
-        brightness = round(0.3*r+0.59*g+0.11*b);
-        work->gist[brightness]++;
-    }
-    if (work->needle_count == 0) // если у нас одна нить продолжаем строить гистограмму (без этого цикла для одной нити была бы обработана только первая строка)
-    {
-        for (int k = work->width; k < work->width * work->length; k++)
-        {
-          r = work->vec[k*(work->bits_per_pixel)];
-          g = work->vec[k*(work->bits_per_pixel) + 1];
-          b = work->vec[k*(work->bits_per_pixel) + 2];
+          r = work->vec[k];
+          g = work->vec[k + 1];
+          b = work->vec[k + 2];
           brightness = round(0.3*r+0.59*g+0.11*b);
           work->gist[brightness]++;
-        }
     }
 }
-
 
 void *do_stuff(void *d)
 {
@@ -50,15 +36,19 @@ void *do_stuff1(void *d)
 
 void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp)
 {
-  int needles = width;
-  vector<mydata> work(width);
+  vector<mydata> work(width); //вектор структур
   int gist[255], enter = 0;
-  cout << endl;
+
   for (int k = 0; k < 255; k++)
   {
     gist[k] = 0;
   }
-  for (int i = 0; i < width; i++ )
+  
+  int k;
+  cout << "Enter the number of parts ";
+  cin >> k;
+  
+  for (int i = 0; i < k; i++ )
   {
     work[i].j = i;
     work[i].bits_per_pixel = bits_per_pixel;
@@ -66,11 +56,17 @@ void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp
     work[i].width = width;
     work[i].length = length;
     work[i].vec = &tmp[0];
-    work[i].needle_count = needles;
+    work[i].n = width * length * bits_per_pixel;
+    work[i].start = width * length * bits_per_pixel * i;
+    work[i].start /= k;
+    work[i].endd = width * length * bits_per_pixel * ( i + 1 );
+    work[i].endd /= k;
     //do_work(&work[i]);
   }
-  cout << endl;
+  
+
   auto start = chrono::high_resolution_clock::now();
+  
   for (int i = 0; i < width; i ++)
   {
       void *ret = (void*)&work[i];
@@ -85,7 +81,7 @@ void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp
   chrono::duration<double> elapsed = finish - start;
   cout << "Elapsed time 1: " << elapsed.count() << " s\n";
 
-  for(int k = 0; k < 255; k++)
+  for(int k = 0; k < 255; k++) //выводим в консоль гистограмму
   {
     if (enter == 50)
     {
@@ -100,9 +96,10 @@ void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp
     }
   }
   enter = 0;
-  needles = 0;
 
-  vector<mydata> work1(width);
+ //случай для 1 нити
+
+  vector<mydata> work1(1); //массив структур для одной нити
 
   for (int k = 0; k < 255; k++)
   {
@@ -111,13 +108,14 @@ void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp
 
   for (int i = 0; i < 1; i++ )
   {
-    work1[i].j = i;
     work1[i].bits_per_pixel = bits_per_pixel;
     work1[i].gist = gist;
     work1[i].width = width;
     work1[i].length = length;
     work1[i].vec = &tmp[0];
-    work[i].needle_count = needles;
+    work1[i].start = 0; 
+    work1[i].endd = width * length * bits_per_pixel;
+    //do_work(&work[i]);
   }
   cout << endl;
   auto start2 = chrono::high_resolution_clock::now();
