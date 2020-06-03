@@ -4,13 +4,13 @@ struct mydata
   pthread_t id;
   int start, endd, width, length, bits_per_pixel;
   int *gist;
+
 };
 
-
-void do_work(mydata *work) //Функция построения гистограммы
+void do_work(mydata *work)
 {
     uint8_t  r, g, b, brightness;
-    for (int k = work -> start; k < work -> endd; k += work -> bits_per_pixel)
+    for (int k = work->start; k < work -> endd; k += 4)
     {
           r = work->vec[k];
           g = work->vec[k + 1];
@@ -27,46 +27,33 @@ void *do_stuff(void *d)
   return 0;
 }
 
-void *do_stuff1(void *d)
-{
-  mydata *data1=(mydata*)d;
-  do_work(data1);
-  return 0;
-}
-
 void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp)
 {
-  vector<mydata> work(width); //вектор структур
+  vector<mydata> work(width);
   int gist[255], enter = 0;
-
+  cout << endl;
   for (int k = 0; k < 255; k++)
   {
     gist[k] = 0;
   }
-  
   int k;
   cout << "Enter the number of parts ";
   cin >> k;
-  
   for (int i = 0; i < k; i++ )
   {
-    work[i].j = i;
     work[i].bits_per_pixel = bits_per_pixel;
     work[i].gist = gist;
     work[i].width = width;
     work[i].length = length;
     work[i].vec = &tmp[0];
-    work[i].n = width * length * bits_per_pixel;
     work[i].start = width * length * bits_per_pixel * i;
     work[i].start /= k;
     work[i].endd = width * length * bits_per_pixel * ( i + 1 );
     work[i].endd /= k;
     //do_work(&work[i]);
   }
-  
 
   auto start = chrono::high_resolution_clock::now();
-  
   for (int i = 0; i < width; i ++)
   {
       void *ret = (void*)&work[i];
@@ -80,58 +67,6 @@ void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp
   auto finish = chrono::high_resolution_clock::now();
   chrono::duration<double> elapsed = finish - start;
   cout << "Elapsed time 1: " << elapsed.count() << " s\n";
-
-  for(int k = 0; k < 255; k++) //выводим в консоль гистограмму
-  {
-    if (enter == 50)
-    {
-      printf("%d ", gist[k]);
-      cout << endl;
-      enter = 0;
-    }
-    else
-    {
-      printf("%d ", gist[k]);
-      enter ++;
-    }
-  }
-  enter = 0;
-
- //случай для 1 нити
-
-  vector<mydata> work1(1); //массив структур для одной нити
-
-  for (int k = 0; k < 255; k++)
-  {
-    gist[k] = 0;
-  }
-
-  for (int i = 0; i < 1; i++ )
-  {
-    work1[i].bits_per_pixel = bits_per_pixel;
-    work1[i].gist = gist;
-    work1[i].width = width;
-    work1[i].length = length;
-    work1[i].vec = &tmp[0];
-    work1[i].start = 0; 
-    work1[i].endd = width * length * bits_per_pixel;
-    //do_work(&work[i]);
-  }
-  cout << endl;
-  auto start2 = chrono::high_resolution_clock::now();
-  for (int i = 0; i < 1; i ++)
-  {
-      void *ret1 = (void*)&work1[i];
-      pthread_create(&work1[i].id, 0, do_stuff1, ret1);
-  }
-
-  for (int i = 0; i < 1; i ++)
-  {
-      pthread_join(work1[i].id, 0);
-  }
-  auto finish2 = chrono::high_resolution_clock::now();
-  chrono::duration<double> elapsed2 = finish2 - start2;
-  cout << "Elapsed time 2: " << elapsed2.count() << " s\n";
 
   for(int k = 0; k < 255; k++)
   {
