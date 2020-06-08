@@ -1,3 +1,300 @@
+#include <iostream>
+#include <stdio.h>
+#include <zlib.h>
+
+#include "zlib.h"
+#include "zconf.h"
+#include <vector>
+#include <math.h>
+#include <assert.h>
+#include <time.h>
+#include <ctime>
+#include <pthread.h>
+#include <chrono>
+#define CHUNK 16384
+using namespace std;
+
+uint16_t swap_byte16 (uint16_t word) // Меняет местами байты
+{
+  return (word << 8) | (word >> 8);
+}
+
+uint32_t swap_byte32 (uint32_t word)
+{
+  return (((word&0xFF) << 24)|((word&0xFF00) << 8)|((word&0xFF0000) >> 8)|((word&0xFF000000) >> 24));
+}
+
+
+int Function(FILE *in, int& width, int& length, int& bits_per_pixel)
+{
+  uint16_t d; uint8_t c[4];  uint32_t IDATlength; uint8_t dictionary; int channels;
+  fseek(in, 1, SEEK_SET);     // Проверяем на PNG-формат
+  fread(c, sizeof(uint8_t), 3, in);
+  if (c[0] == 80 && c[1] == 78 && c[2] == 71) {printf("the file is in PNG format \n");}
+  else {printf("this is not PNG format \n"); return -1;}
+
+  fseek(in, 18, SEEK_SET);              //Выводим размеры изображения
+  fread( &d, sizeof(uint16_t), 2, in);
+  cout << "sizes are - ";
+  printf("%d  ", swap_byte16(d));
+  length = swap_byte16(d);
+  fseek(in, 22, SEEK_SET);
+  fread( &d, sizeof(uint16_t), 2, in);
+  width = swap_byte16(d);
+  printf("%d  ", swap_byte16(d));
+
+  fseek(in, 24, SEEK_SET);         // Выведем информацию из чанка IHDR, посчитаем количество битов необходимое для кодирование одного пикселя
+  fread( c, sizeof(uint8_t), 5, in);
+  printf("\nbit depth is - %x \n", c[0]);
+  printf("color type is - %x ", c[1]);
+  switch (c[1])
+  {
+        case 0:
+            cout << "grayscale"; channels = 1;
+            break;
+        case 2:
+            cout << "RGB"; channels = 3;
+            break;
+        case 3:
+            cout << "indexed values"; channels = 1;
+            break;
+        case 4:
+            cout << "grayscale and alpha channel"; channels = 2;
+            break;
+        case 6:
+            cout << "RGBA"; channels = 4;
+  }
+  bits_per_pixel = channels*c[0]/8;
+  printf("\nbits per pixel - %d \n", bits_per_pixel);
+
+  printf("compression method - %x \n", c[2]);
+  printf("filter method - %x \n", c[3]);
+  printf("interlace method - %x \n", c[4]);
+
+  int i = 0, j = 0;  // Вычисляем позицию чанка IDAT. Для этого будем бежать по файлу, пока не найдем явно слово "IDAT" с помощью ASCII table
+  do{
+          fseek(in, i, SEEK_SET);
+          fread( c, sizeof(uint8_t), 4, in);
+          if (c[0] == 73 && c[1] == 68 && c[2] == 65 && c[3] == 84)   {j = 1;}
+          else  {i = i+1;}
+    }while (j != 1);
+  printf("IDAT position - %d \n", i);
+
+  fseek(in, i - 4, SEEK_SET);   // Узнаем длину чанка IDAT (читаем 4 байта до слова IDAT в таблице)
+  fread(&IDATlength, sizeof(uint32_t), 1, in);
+  IDATlength = swap_byte32(IDATlength);
+  printf("IDAT length - %d \n", IDATlength);
+
+  fseek(in, i + 5, SEEK_SET); //Проверяем наличие словаря
+  fread(&dictionary, sizeof(uint8_t), 1, in);
+  if ((dictionary & (1<<5)) == 0) { cout << "There is no dictionary" << endl << endl;}
+
+  return (i); // Возвращаем значение позиции чанка IDAT
+}
+
+
+int inf(FILE *source, vector<uint8_t>& res, int bpp, int length)  //Функция распаковки изображения
+{
+            int ret;
+            unsigned have;
+            z_stream strm;
+            unsigned char in[CHUNK];
+            unsigned char out[CHUNK];
+            strm.zalloc = Z_NULL;
+            strm.zfree = Z_NULL;
+            strm.opaque = Z_NULL;
+            strm.avail_in = 0;
+            strm.next_in = Z_NULL;
+            ret = inflateInit(&strm);
+            if (ret != Z_OK) {return ret;}
+            do {
+                strm.avail_in = fread(in, 1, CHUNK, source);
+                if (ferror(source))
+                {
+                  (void) inflateEnd(&strm);
+                  return Z_ERRNO;
+                }
+                if (strm.avail_in == 0) {break;}
+                strm.next_in = in;
+                do {
+                    strm.avail_out = CHUNK;
+                    strm.next_out = out;
+                    ret = inflate(&strm, Z_NO_FLUSH);
+                    assert(ret != Z_STREAM_ERROR);
+                    switch (ret)
+                    {
+                        case Z_NEED_DICT: {ret = Z_DATA_ERROR;}
+                        case Z_MEM_ERROR: {(void) inflateEnd(&strm); return ret;}
+                    }
+                    have = CHUNK - strm.avail_out;
+
+                    int l = 0;
+                    for(int j = 0; j < have; j++)
+                    {
+                      if (l == bpp*length)
+                      {
+                      //  printf("%d ", out[j]);
+                        //cout << endl;
+                        l = 0;
+                      }
+                      else  {//printf("%d ", out[j]); l++;
+
+                      }
+                    }
+
+                    for(int j = 0; j < have; j++)
+                    {
+                      res.push_back(out[j]);
+                    }
+                } while (strm.avail_out == 0);
+            } while (ret != Z_STREAM_END);
+            (void) inflateEnd(&strm);
+            if(ret != Z_STREAM_END)
+            {
+              return  Z_DATA_ERROR;
+            }
+            return Z_OK;
+}
+
+
+
+
+
+void zerr(int ret)  // Функция обработки ошибок при распаковке файла
+{
+    switch (ret) {
+        case Z_ERRNO:
+            cout << "error reading" << endl;
+            break;
+        case Z_STREAM_ERROR:
+            cout << "invalid compression level" << endl;
+            break;
+        case Z_DATA_ERROR:
+            cout << "invalid or incomplete deflate data" << endl;
+            break;
+        case Z_MEM_ERROR:
+            cout << "out of memory" << endl;
+            break;
+        case Z_VERSION_ERROR:
+            cout << "zlib version mismatch!" << endl;
+    }
+}
+
+
+PaethPredictor (uint8_t a,uint8_t b,uint8_t c)
+{
+        //a = слева, b = вверху, c = вверху слева
+        uint8_t p = a + b - c; //начальная оценка
+        if ( (abs (p - a) <= abs (p - b) ) && (abs (p - a) <= abs (p - c)) )
+        {return a;}
+        else if(abs (p - b) <= abs (p - c))
+        {return b;}
+        else
+        {return c;}
+}
+
+
+void func_filters_applying(vector<uint8_t>& res, int length, int width, int bpp, vector<uint8_t>& tmp) // передаем вектор, длину и ширину картинки, а также количество бит для кодирования 1 пикселя
+{
+    uint8_t a,b,c;
+    int otstup = bpp * length; // значение того через сколько элементов массива снова встретиться фильтр
+    for(int i = 0; i < width; i++)  // пробегаем по количеству строк
+    {
+        if(res[i*otstup+i] == 0) //фильтр 0, просто выводим строку
+        {
+            for (int j = i*otstup+i+1; j < i*otstup + i + otstup + 1; j++)
+            {
+                //printf("%d ", res[j]);
+                tmp.push_back(res[j]);
+            }
+           // cout << endl;
+        }
+
+        else if(res[i*otstup+i] == 1)  // если первый элемент в строке (который равен значению фильтра) равен 1, тогда
+        {
+          res[i*otstup+i] = 0;
+          for (int q = i*otstup+i+1; q < i*otstup + i + otstup + 1; q ++)
+          {
+              if (q <= bpp)
+              {
+                //  printf("%d ", res[q]);
+                  tmp.push_back(res[q]);
+              }
+              else
+              {
+                res[q] = res[q] + res[q-bpp];
+                //printf("%d ", res[q]);
+                tmp.push_back(res[q]);
+              }
+          }
+          //cout << endl;
+        }
+
+        else if(res[i*otstup+i] == 2)  // если фильтра равен 2, то реализуем другую формулу
+        {
+            res[i*otstup+i] = 0;
+            for (int j = i*otstup+i+1; j < i*otstup + i + otstup + 1; j++)
+            {
+                res[j] = res[j] + res[j-otstup-1];
+                //printf("%d ", res[j]);
+                tmp.push_back(res[j]);
+            }
+          //  cout <<endl;
+        }
+
+        else if(res[i*otstup+i] == 3) // аналогично для фильтра 3
+        {
+          for (int j = i*otstup+i+1; j < i*otstup + i + otstup + 1; j++)
+          {
+                if (j < bpp + 1)
+                {
+                   // printf("%d ", res[j]);
+                    tmp.push_back(res[j]);
+                }
+                else
+                {
+                  res[j] = res[j] + floor( (res[j-bpp] + res[j-otstup-1])/2 ) ;
+                  //printf("%d ", res[j]);
+                  tmp.push_back(res[j]);
+                }
+          }
+          cout << endl;
+        }
+        else if (res[i*otstup+i] == 4) //если фильтр 4
+        {
+          for (int k = i*otstup+i+1; k < i*otstup + i + otstup + 1; k++)
+          {
+             if (k < bpp + 1)
+             {
+                 // printf("%d ", res[k]);
+                     tmp.push_back(res[k]);
+             }
+             else
+             {
+                 b = res[k - otstup - 1];
+                 a = res[k - bpp];
+                 c = res[k - otstup - 1 - bpp];
+                 res[k] = res[k] + PaethPredictor (a, b, c);
+                 //printf("%d ", res[k]);
+                    tmp.push_back(res[k]);
+             }
+          }
+          cout << endl;
+        }
+    }
+}
+
+
+struct mydata
+{
+  uint8_t *vec;
+  pthread_t id;
+  int start, endd, width, length, bits_per_pixel, j;
+  int **gist;
+
+};
+
+
 void do_work(mydata *work)
 {
     uint8_t  r, g, b, brightness;
@@ -103,3 +400,83 @@ void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp
   }
 
 }
+
+
+/*void gistogramma2(int length, int width, int bpp, vector<uint8_t>& tmp)
+{
+
+
+    int gist[255], enter = 0;
+    for (int k = 0; k < 255; k++) //очищаем массив для гистограммы
+    {
+        gist[k] = 0;
+    }
+    uint8_t r, g, b, brightness;
+    cout << endl;
+    auto start1 = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < length*width; i++) // вычисляем яркость каждого пикселя
+    {
+        r = tmp[i*bpp];
+        g = tmp[i*bpp + 1];
+        b = tmp[i*bpp + 2];
+        brightness = round(0.3*r+0.59*g+0.11*b);
+        gist[brightness]++;
+     }
+    auto finish1 = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed1 = finish1 - start1;
+    std::cout << "Elapsed time 2: " << elapsed1.count() << " s\n";
+    cout << "Gistogramma:" << endl;
+    for (int k = 0; k < 255; k++)
+    {
+         if (enter == 50)
+         {
+           printf("%d ", gist[k]);
+           cout << endl;
+           enter = 0;
+         }
+         else
+         {
+            printf("%d ", gist[k]);
+            enter ++;
+         }
+    }
+}*/
+
+
+int main()
+{
+  vector<uint8_t> res; int bits_per_pixel; int width; int length; vector<uint8_t> tmp;
+  FILE *in = fopen("example.png", "rb");
+  if( in == NULL )
+  { printf("Error \n"); return -1; }
+
+  int IDATpos = Function(in, width, length, bits_per_pixel);
+
+  fseek(in, IDATpos + 4, SEEK_SET); // Перед тем как вызвать функцию перемести указатель в файле на первый байт после слова IDAT
+
+  int answer = inf(in, res, bits_per_pixel, length);  // Функция распаковки изображения
+
+  if(answer != Z_OK) {zerr(answer); return 1;}
+  //else {cout << endl << "The image was unpacked successfully:" << endl;}
+
+  func_filters_applying(res, length, width, bits_per_pixel, tmp); // Функция применения фильтра
+
+  //auto start = std::chrono::high_resolution_clock::now();
+
+  //gistogramma2(length, width, bits_per_pixel, tmp);
+
+  //auto finish = std::chrono::high_resolution_clock::now();
+  //std::chrono::duration<double> elapsed = finish - start;
+  //std::cout << "Elapsed time 1: " << elapsed.count() << " s\n";
+
+  //auto start1 = std::chrono::high_resolution_clock::now();
+
+  gistogramma(length, width, bits_per_pixel, tmp);
+
+ // auto finish1 = std::chrono::high_resolution_clock::now();
+ // std::chrono::duration<double> elapsed1 = finish1 - start1;
+ // std::cout << "Elapsed time 2: " << elapsed1.count() << " s\n";
+  fclose(in);
+  _getch();
+}
+
