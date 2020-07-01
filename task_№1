@@ -266,17 +266,15 @@ void func_filters_applying(vector<uint8_t>& res, int length, int width, int bpp,
           {
              if (k < bpp + 1)
              {
-                 // printf("%d ", res[k]);
-                     tmp.push_back(res[k]);
+                tmp.push_back(res[k]);
              }
              else
              {
                  b = res[k - otstup - 1];
                  a = res[k - bpp];
                  c = res[k - otstup - 1 - bpp];
-                 res[k] = res[k] + PaethPredictor (a, b, c);
-                 //printf("%d ", res[k]);
-                    tmp.push_back(res[k]);
+                 res[k] = res[k] + PaethPredictor (a, b, c);      
+                 tmp.push_back(res[k]);
              }
           }
           cout << endl;
@@ -401,48 +399,6 @@ void gistogramma(int length, int width, int bits_per_pixel, vector<uint8_t>& tmp
 
 }
 
-
-/*void gistogramma2(int length, int width, int bpp, vector<uint8_t>& tmp)
-{
-
-
-    int gist[255], enter = 0;
-    for (int k = 0; k < 255; k++) //очищаем массив для гистограммы
-    {
-        gist[k] = 0;
-    }
-    uint8_t r, g, b, brightness;
-    cout << endl;
-    auto start1 = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < length*width; i++) // вычисляем яркость каждого пикселя
-    {
-        r = tmp[i*bpp];
-        g = tmp[i*bpp + 1];
-        b = tmp[i*bpp + 2];
-        brightness = round(0.3*r+0.59*g+0.11*b);
-        gist[brightness]++;
-     }
-    auto finish1 = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> elapsed1 = finish1 - start1;
-    std::cout << "Elapsed time 2: " << elapsed1.count() << " s\n";
-    cout << "Gistogramma:" << endl;
-    for (int k = 0; k < 255; k++)
-    {
-         if (enter == 50)
-         {
-           printf("%d ", gist[k]);
-           cout << endl;
-           enter = 0;
-         }
-         else
-         {
-            printf("%d ", gist[k]);
-            enter ++;
-         }
-    }
-}*/
-
-
 int main()
 {
   vector<uint8_t> res; int bits_per_pixel; int width; int length; vector<uint8_t> tmp;
@@ -457,26 +413,15 @@ int main()
   int answer = inf(in, res, bits_per_pixel, length);  // Функция распаковки изображения
 
   if(answer != Z_OK) {zerr(answer); return 1;}
-  //else {cout << endl << "The image was unpacked successfully:" << endl;}
+
 
   func_filters_applying(res, length, width, bits_per_pixel, tmp); // Функция применения фильтра
 
-  //auto start = std::chrono::high_resolution_clock::now();
-
-  //gistogramma2(length, width, bits_per_pixel, tmp);
-
-  //auto finish = std::chrono::high_resolution_clock::now();
-  //std::chrono::duration<double> elapsed = finish - start;
-  //std::cout << "Elapsed time 1: " << elapsed.count() << " s\n";
-
-  //auto start1 = std::chrono::high_resolution_clock::now();
+ 
 
   gistogramma(length, width, bits_per_pixel, tmp);
 
- // auto finish1 = std::chrono::high_resolution_clock::now();
- // std::chrono::duration<double> elapsed1 = finish1 - start1;
- // std::cout << "Elapsed time 2: " << elapsed1.count() << " s\n";
+ 
   fclose(in);
   _getch();
 }
-
